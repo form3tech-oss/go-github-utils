@@ -1,4 +1,4 @@
-package codeowners
+package commit
 
 import (
 	"bytes"
