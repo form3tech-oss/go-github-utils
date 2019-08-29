@@ -11,6 +11,10 @@ import (
 	"golang.org/x/crypto/openpgp"
 )
 
+const (
+	branchPrefix = "refs/heads/"
+)
+
 type CommitOptions struct {
 	RepoOwner                   string
 	RepoName                    string
@@ -88,6 +92,9 @@ func CreateCommit(client *github.Client, options *CommitOptions) error {
 	prBranchName := options.PullRequestSourceBranchName
 	if prBranchName == "" {
 		prBranchName = fmt.Sprintf("go-github-utils-%d", time.Now().UnixNano())
+	}
+	if !strings.HasPrefix(prBranchName, branchPrefix) {
+		prBranchName = fmt.Sprintf("%s%s", branchPrefix, prBranchName)
 	}
 	prBranch := &github.Reference{
 		Ref: github.String(prBranchName),
