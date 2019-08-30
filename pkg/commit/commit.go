@@ -1,7 +1,6 @@
 package commit
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -77,9 +76,11 @@ func CreateCommit(ctx context.Context, client *github.Client, options *CommitOpt
 	}
 
 	if options.GpgPrivateKey != "" {
-		if err := signCommit(commit, options.GpgPrivateKey, options.GpgPassphrase); err != nil {
+		k, err := readGPGPrivateKey(options.GpgPrivateKey, options.GpgPassphrase)
+		if err != nil {
 			return err
 		}
+		commit.SigningKey = k
 	}
 
 	newCommit, _, err := client.Git.CreateCommit(ctx, options.RepoOwner, options.RepoName, commit)
@@ -142,43 +143,7 @@ func CreateCommit(ctx context.Context, client *github.Client, options *CommitOpt
 	return nil
 }
 
-func signCommit(commit *github.Commit, privateKey string, passphrase string) error {
-
-	// the payload must be "an over the string commit as it would be written to the object database"
-	// we sign this data to verify the commit
-	payload := fmt.Sprintf(
-		`tree %s
-parent %s
-author %s <%s> %d +0000
-committer %s <%s> %d +0000
-
-%s`,
-		commit.Tree.GetSHA(),
-		commit.Parents[0].GetSHA(),
-		commit.Author.GetName(),
-		commit.Author.GetEmail(),
-		commit.Author.Date.Unix(),
-		commit.Author.GetName(),
-		commit.Author.GetEmail(),
-		commit.Author.Date.Unix(),
-		commit.GetMessage(),
-	)
-
-	// sign the payload data
-	signature, err := createSignature(payload, privateKey, passphrase)
-	if err != nil {
-		return err
-	}
-
-	commit.Verification = &github.SignatureVerification{
-		Signature: signature,
-	}
-
-	return nil
-}
-
-func createSignature(data string, privateKey string, passphrase string) (*string, error) {
-
+func readGPGPrivateKey(privateKey string, passphrase string) (*openpgp.Entity, error) {
 	entityList, err := openpgp.ReadArmoredKeyRing(strings.NewReader(privateKey))
 	if err != nil {
 		return nil, err
@@ -202,13 +167,5 @@ func createSignature(data string, privateKey string, passphrase string) (*string
 			}
 		}
 	}
-
-	out := new(bytes.Buffer)
-	reader := strings.NewReader(data)
-	if err := openpgp.ArmoredDetachSign(out, pk, reader, nil); err != nil {
-		return nil, err
-	}
-
-	signature := string(out.Bytes())
-	return &signature, nil
+	return pk, nil
 }
