@@ -30,9 +30,7 @@ type CommitOptions struct {
 	PullRequestBody             string
 }
 
-func CreateCommit(client *github.Client, options *CommitOptions) error {
-
-	ctx := context.Background()
+func CreateCommit(ctx context.Context, client *github.Client, options *CommitOptions) error {
 	branch := options.Branch
 
 	if branch == "" {
@@ -132,7 +130,7 @@ func CreateCommit(client *github.Client, options *CommitOptions) error {
 		// base branch was likely modified, try again
 		if response.StatusCode == 405 && options.RetryCount < 3 {
 			options.RetryCount++ // don't retry again
-			return CreateCommit(client, options)
+			return CreateCommit(ctx, client, options)
 		}
 
 		return fmt.Errorf("failed to merge PR: HTTP %d: %s", response.StatusCode, err)
