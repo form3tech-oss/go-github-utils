@@ -22,6 +22,7 @@ type CommitOptions struct {
 	GpgPassphrase               string
 	GpgPrivateKey               string // detached armor format
 	Changes                     []github.TreeEntry
+	BaseTreeOverride            *string  // Pointer so we can use "" as the override.
 	Branch                      string
 	Username                    string
 	Email                       string
@@ -48,7 +49,11 @@ func CreateCommit(ctx context.Context, client *github.Client, options *CommitOpt
 	}
 
 	// create tree containing required changes
-	tree, _, err := client.Git.CreateTree(ctx, options.RepoOwner, options.RepoName, s, options.Changes)
+	baseTree := s
+	if options.BaseTreeOverride != nil {
+		baseTree = *options.BaseTreeOverride
+	}
+	tree, _, err := client.Git.CreateTree(ctx, options.RepoOwner, options.RepoName, baseTree, options.Changes)
 	if err != nil {
 		return err
 	}
