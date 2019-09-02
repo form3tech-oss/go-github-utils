@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/form3tech-oss/go-github-utils/pkg/branch"
 	"github.com/google/go-github/v28/github"
 	"golang.org/x/crypto/openpgp"
 )
@@ -31,30 +32,30 @@ type CommitOptions struct {
 }
 
 func CreateCommit(ctx context.Context, client *github.Client, options *CommitOptions) error {
-	branch := options.Branch
-
-	if branch == "" {
-		rep, _, err := client.Repositories.Get(ctx, options.RepoOwner, options.RepoName)
+	// Use the default branch if none is specified.
+	b := options.Branch
+	if b == "" {
+		v, err := branch.GetDefaultBranch(ctx, client, options.RepoOwner, options.RepoName)
 		if err != nil {
 			return err
 		}
-		branch = *rep.DefaultBranch
+		b = v
 	}
 
-	// get ref for selected branch
-	ref, _, err := client.Git.GetRef(ctx, options.RepoOwner, options.RepoName, "refs/heads/"+branch)
+	// Get the SHA for the target branch.
+	s, err := branch.GetSHAForBranch(ctx, client, options.RepoOwner, options.RepoName, b)
 	if err != nil {
 		return err
 	}
 
 	// create tree containing required changes
-	tree, _, err := client.Git.CreateTree(ctx, options.RepoOwner, options.RepoName, *ref.Object.SHA, options.Changes)
+	tree, _, err := client.Git.CreateTree(ctx, options.RepoOwner, options.RepoName, s, options.Changes)
 	if err != nil {
 		return err
 	}
 
 	// get parent commit
-	parent, _, err := client.Repositories.GetCommit(ctx, options.RepoOwner, options.RepoName, *ref.Object.SHA)
+	parent, _, err := client.Repositories.GetCommit(ctx, options.RepoOwner, options.RepoName, s)
 	if err != nil {
 		return err
 	}
@@ -109,7 +110,7 @@ func CreateCommit(ctx context.Context, client *github.Client, options *CommitOpt
 	pr, _, err := client.PullRequests.Create(ctx, options.RepoOwner, options.RepoName, &github.NewPullRequest{
 		Title:               github.String(options.CommitMessage),
 		Head:                prBranch.Ref,
-		Base:                github.String(branch),
+		Base:                github.String(b),
 		Body:                github.String(options.PullRequestBody),
 		MaintainerCanModify: github.Bool(false),
 	})
