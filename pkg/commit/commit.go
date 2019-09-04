@@ -22,16 +22,25 @@ type CommitOptions struct {
 	GpgPassphrase               string
 	GpgPrivateKey               string // detached armor format
 	Changes                     []github.TreeEntry
-	BaseTreeOverride            *string  // Pointer so we can use "" as the override.
+	BaseTreeOverride            *string // Pointer so we can use "" as the override.
 	Branch                      string
 	Username                    string
 	Email                       string
-	RetryCount                  int
+	MaxRetries                  int
+	RetryBackoff                time.Duration
 	PullRequestSourceBranchName string
 	PullRequestBody             string
 }
 
 func CreateCommit(ctx context.Context, client *github.Client, options *CommitOptions) error {
+	// Use sane defaults for 'MaxRetries' and 'RetryBackoff'.
+	if options.MaxRetries <= 0 {
+		options.MaxRetries = 3
+	}
+	if options.RetryBackoff == 0 {
+		options.RetryBackoff = 5 * time.Second
+	}
+
 	// Use the default branch if none is specified.
 	b := options.Branch
 	if b == "" {
@@ -124,28 +133,29 @@ func CreateCommit(ctx context.Context, client *github.Client, options *CommitOpt
 		return err
 	}
 
-	_, response, err := client.PullRequests.Merge(ctx, options.RepoOwner, options.RepoName, pr.GetNumber(), commit.GetMessage(), nil)
-	if err != nil {
-
+	for retryCount := 1; retryCount <= options.MaxRetries; retryCount++ {
+		_, res, err := client.PullRequests.Merge(ctx, options.RepoOwner, options.RepoName, pr.GetNumber(), commit.GetMessage(), nil)
+		if err == nil {
+			// PR was merged, so we can attempt to remove our working branch.
+			// This isn't a critical operation, hence we do not error out if we fail to do so.
+			_, _ = client.Git.DeleteRef(ctx, options.RepoOwner, options.RepoName, prRef.GetRef())
+			break
+		}
+		if retryCount < options.MaxRetries {
+			// Give some additional time for GitHub to finish checking if the PR is mergeable and retry.
+			// https://github.community/t5/GitHub-API-Development-and/Merging-via-REST-API-returns-405-Base-branch-was-modified-Review/m-p/19556#M975
+			time.Sleep(options.RetryBackoff)
+			continue
+		}
+		// The PR couldn't be merged after the specified number of retries.
+		// Therefore, we try close it and error out.
 		pr.State = github.String("closed")
 		_, _, _ = client.PullRequests.Edit(ctx, options.RepoOwner, options.RepoName, pr.GetNumber(), pr)
-
-		if response == nil {
-			return fmt.Errorf("failed to merge PR: %s", err)
+		if res != nil {
+			return fmt.Errorf("failed to merge PR: HTTP %d: %v", res.StatusCode, err)
 		}
-
-		// base branch was likely modified, try again
-		if response.StatusCode == 405 && options.RetryCount < 3 {
-			options.RetryCount++ // don't retry again
-			return CreateCommit(ctx, client, options)
-		}
-
-		return fmt.Errorf("failed to merge PR: HTTP %d: %s", response.StatusCode, err)
+		return fmt.Errorf("failed to merge PR: %v", err)
 	}
-
-	// PR was merged, so we can attempt to remove our working branch (ignore failures, this isn't vital)
-	_, _ = client.Git.DeleteRef(ctx, options.RepoOwner, options.RepoName, prRef.GetRef())
-
 	return nil
 }
 
