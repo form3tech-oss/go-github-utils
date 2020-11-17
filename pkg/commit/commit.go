@@ -30,6 +30,7 @@ type CommitOptions struct {
 	RetryBackoff                time.Duration
 	PullRequestSourceBranchName string
 	PullRequestBody             string
+	MergeMethod                 string
 }
 
 func CreateCommit(ctx context.Context, client *github.Client, options *CommitOptions) error {
@@ -133,8 +134,12 @@ func CreateCommit(ctx context.Context, client *github.Client, options *CommitOpt
 		return err
 	}
 
+	prOpts := &github.PullRequestOptions{
+		MergeMethod: options.MergeMethod,
+	}
+
 	for retryCount := 1; retryCount <= options.MaxRetries; retryCount++ {
-		_, res, err := client.PullRequests.Merge(ctx, options.RepoOwner, options.RepoName, pr.GetNumber(), commit.GetMessage(), nil)
+		_, res, err := client.PullRequests.Merge(ctx, options.RepoOwner, options.RepoName, pr.GetNumber(), commit.GetMessage(), prOpts)
 		if err == nil {
 			// PR was merged, so we can attempt to remove our working branch.
 			// This isn't a critical operation, hence we do not error out if we fail to do so.
