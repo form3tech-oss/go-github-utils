@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/form3tech-oss/go-github-utils/pkg/branch"
-	"github.com/google/go-github/v28/github"
+	"github.com/google/go-github/v37/github"
 	"golang.org/x/crypto/openpgp"
 )
 
@@ -21,7 +21,7 @@ type CommitOptions struct {
 	CommitMessage               string
 	GpgPassphrase               string
 	GpgPrivateKey               string // detached armor format
-	Changes                     []github.TreeEntry
+	Changes                     []*github.TreeEntry
 	BaseTreeOverride            *string // Pointer so we can use "" as the override.
 	Branch                      string
 	Username                    string
@@ -87,7 +87,7 @@ func CreateCommit(ctx context.Context, client *github.Client, options *CommitOpt
 		Author:  author,
 		Message: &options.CommitMessage,
 		Tree:    tree,
-		Parents: []github.Commit{*parent.Commit},
+		Parents: []*github.Commit{parent.Commit},
 	}
 
 	if options.GpgPrivateKey != "" {
