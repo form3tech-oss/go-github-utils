@@ -92,15 +92,19 @@ func CreateCommit(ctx context.Context, client *github.Client, options *CommitOpt
 		Parents: []*github.Commit{parent.Commit},
 	}
 
+	commitOptions := github.CreateCommitOptions{}
 	if options.GpgPrivateKey != "" {
 		k, err := readGPGPrivateKey(options.GpgPrivateKey, options.GpgPassphrase)
 		if err != nil {
 			return err
 		}
-		commit.SigningKey = k
+
+		commitOptions.Signer = github.MessageSignerFunc(func(w io.Writer, r io.Reader) error {
+			return openpgp.ArmoredDetachSign(w, k, r, nil)
+		})
 	}
 
-	newCommit, _, err := client.Git.CreateCommit(ctx, options.RepoOwner, options.RepoName, commit)
+	newCommit, _, err := client.Git.CreateCommit(ctx, options.RepoOwner, options.RepoName, commit, &commitOptions)
 	if err != nil {
 		return err
 	}
