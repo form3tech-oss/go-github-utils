@@ -3,12 +3,13 @@ package commit
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/form3tech-oss/go-github-utils/pkg/branch"
-	"github.com/google/go-github/v54/github"
+	"github.com/google/go-github/v66/github"
 )
 
 const (
