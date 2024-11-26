@@ -1,6 +1,6 @@
 module github.com/form3tech-oss/go-github-utils
 
-go 1.23.1
+go 1.22
 
 require (
 	github.com/ProtonMail/go-crypto v0.0.0-20230217124315-7d5c6f04bbb8
